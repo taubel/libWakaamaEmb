@@ -41,7 +41,7 @@ void udp_raw_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_
 
 uint8_t internal_init_sockets(lwm2m_context_t * contextP, network_t* network, uint16_t localPort)
 {
-    if (!localPort) {
+    if (localPort) {
         // Server
         network->type = NET_SERVER_PROCESS;
     } else {
@@ -171,7 +171,7 @@ int mbedtls_net_send(void *ctx, const unsigned char *buffer, size_t len) {
 
 int mbedtls_net_recv( void *ctx, unsigned char *buf, size_t len ) {
     connection_t * connection = (connection_t*)ctx;
-    if (!connection->p || connection->p->tot_len) {
+    if (!connection->p || !connection->p->tot_len) {
         network_log_error("recvfrom failed %i", connection->sock);
         return MBEDTLS_ERR_SSL_CONN_EOF;
     }
