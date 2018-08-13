@@ -85,13 +85,20 @@ void udp_raw_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_
     t.port = port;
     t.addr = *addr;
     connection_t * connection = internal_connection_find(network, t);
-    if (!connection) return;
+    if (!connection)
+    {
+	goto exit;
+    }
     connection->addr = t;
     connection->p = p;
     
     internal_network_read(contextP, buffer, numBytes, connection);
 
-    pbuf_free(p);
+exit:
+    if(p != NULL)
+    {
+	pbuf_free(p);
+    }
 }
 
 inline void internal_closeSocket(network_t* network, unsigned socket_handle) {
