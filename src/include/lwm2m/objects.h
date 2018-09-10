@@ -355,6 +355,7 @@ class ResourceRaw<ResID,ObjectInstance,int32_t,offset,Operations> : public lwm2m
 public:
     ResourceRaw() : lwm2m_object_res_item_t {ResID,Operations,O_RES_INT32,offset} {}
 };
+
 template<uint16_t ResID, class ObjectInstance, size_t offset, uint8_t Operations>
 class ResourceRaw<ResID,ObjectInstance,uint32_t,offset,Operations> : public lwm2m_object_res_item_t {
 public:
@@ -366,6 +367,14 @@ class ResourceRaw<ResID,ObjectInstance,int64_t,offset,Operations> : public lwm2m
 public:
     ResourceRaw() : lwm2m_object_res_item_t {ResID,Operations,O_RES_INT64,offset} {}
 };
+
+template<uint16_t ResID, class ObjectInstance, class ResourceType, size_t offset, uint8_t Operations>
+class ResourceRaw<ResID,ObjectInstance, ResourceType, offset, Operations,
+            typename std::enable_if<!std::is_same<int, int32_t>::value && std::is_same<ResourceType, int>::value>::type> : public lwm2m_object_res_item_t {
+public:
+ ResourceRaw() : lwm2m_object_res_item_t {ResID,Operations,O_RES_INT32,offset} {}
+};
+
 
 //////////// For indirect resources, where we do not need to define operations ///////////
 
