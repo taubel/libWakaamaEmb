@@ -156,7 +156,7 @@ void * lwm2m_connect_server(uint16_t secObjInstID, lwm2m_context_t * context) {
     security_instance_t* secInst = lwm2m_get_security_object(context, secObjInstID);
     if (!secInst) return NULL;
 
-    secInst->securityMode = LWM2M_SECURITY_MODE_NONE;
+    //secInst->securityMode = LWM2M_SECURITY_MODE_NONE;
 
     strncpy(uri, secInst->uri, sizeof (uri));
 

@@ -222,6 +222,33 @@ bool lwm2m_use_dtls_psk(lwm2m_context_t *contextP, uint16_t shortServerID,
 
     return true;
 }
+
+bool lwm2m_use_dtls_x509(lwm2m_context_t *contextP, uint16_t shortServerID,
+                                const char *certificate, const char *privateKey, const char *serverCertificate)
+{
+    security_instance_t * securityInstance=get_security_object_by_server_id(contextP, shortServerID);
+    if (NULL == securityInstance) return false;
+
+    internal_erase_security_params(securityInstance);
+
+    if (certificate != NULL && privateKey != NULL && serverCertificate != NULL) {
+//      not copying strings because they are already statically allocated and large in length
+        securityInstance->securityMode = LWM2M_SECURITY_MODE_CERTIFICATE;
+
+        securityInstance->publicIdentity = certificate;
+        securityInstance->publicIdLen = strlen(certificate);
+
+        securityInstance->secretKey = privateKey;
+        securityInstance->secretKeyLen = strlen(privateKey);
+
+        securityInstance->serverPublicKey = serverCertificate;
+        securityInstance->serverPublicKeyLen = strlen(serverCertificate);
+    } else {
+        securityInstance->securityMode = LWM2M_SECURITY_MODE_NONE;
+    }
+
+    return true;
+}
 #endif
 
 inline bool lwm2m_is_connected(lwm2m_context_t *contextP) {

@@ -107,6 +107,27 @@ bool lwm2m_add_server(lwm2m_context_t *contextP, uint16_t shortServerID,
 bool lwm2m_use_dtls_psk(lwm2m_context_t *contextP, uint16_t shortServerID, const char* publicId,
                         const char* psk, unsigned short pskLen);
 
+/**
+ * Alters a servers security details by adding preshared key DTLS information.
+ * Call this before entering the main loop (lwm2m_process(context)).
+ *
+ * Warning: If you have specified a "coap://" URI in lwm2m_add_server(...), then
+ * publicId and psk will be set to NULL on a connection attempt.
+ *
+ * The LwM2M specification V1.0 says: "Since the security of the default PSK Cipher Suites
+ * rely on the length and the entropy of this shared secret
+ * it is RECOMMENDED to provision a 16 byte (128 bit) key"
+ *
+ * @param contextP Wakaama context
+ * @param shortServerID A unique server id
+ * @param publicId publicIdentity for DTLS. May be NULL if no secure connection is used.
+ * The expected c-string is copied to a new memory location.
+ * @param psk Passkey if DTLS is used. May be NULL. The byte array is copied to a new memory location.
+ * @param pskLen Passkey length. Should be 0 if no passkey is used.
+ * @return Return true if successfully added and false if aborted due to no memory.
+ */
+bool lwm2m_use_dtls_x509(lwm2m_context_t *contextP, uint16_t shortServerID, const char *certificate,
+                        const char *privateKey, const char *serverCertificate);
 
 /**
  * Alters a servers security details by adding a raw public key of the server in question.

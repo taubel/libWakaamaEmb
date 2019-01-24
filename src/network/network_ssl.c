@@ -208,13 +208,25 @@ connection_t * internal_configure_ssl(connection_t * connection,
                                              security_instance_t* secInst) {
     if (connection->dtls) {
         int ret;
-        int prefered_cipherlist[] = {
-            MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8,
-            MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
-            MBEDTLS_TLS_PSK_WITH_AES_128_CBC_SHA256,
-            MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-            0
-        };
+        int preferedCiphers[] = { 0, 0, 0 };
+        mbedtls_x509_crt certificateCA;
+        mbedtls_x509_crt certificateClient;
+        mbedtls_pk_context privateKey;
+
+        if (secInst->securityMode == LWM2M_SECURITY_MODE_PRE_SHARED_KEY)
+        {
+            preferedCiphers[0] = MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8;
+            preferedCiphers[1] = MBEDTLS_TLS_PSK_WITH_AES_128_CBC_SHA256;
+        }
+        else if (secInst->securityMode == LWM2M_SECURITY_MODE_CERTIFICATE)
+        {
+            preferedCiphers[0] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
+            preferedCiphers[1] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256;
+        }
+        else
+        {
+            return NULL;
+        }
 
         mbedtls_ssl_init( &connection->ssl );
         mbedtls_ssl_config_init( &connection->conf );
@@ -228,10 +240,28 @@ connection_t * internal_configure_ssl(connection_t * connection,
             lwm2m_free(connection);
             return NULL;
         }
-        mbedtls_ssl_conf_psk(&connection->conf,
-                             ( const unsigned char*)secInst->secretKey,secInst->secretKeyLen,
-                            ( const unsigned char*) secInst->publicIdentity,secInst->publicIdLen);
-        mbedtls_ssl_conf_authmode( &connection->conf, MBEDTLS_SSL_VERIFY_NONE );
+
+        if (secInst->securityMode == LWM2M_SECURITY_MODE_PRE_SHARED_KEY)
+        {
+            mbedtls_ssl_conf_psk(&connection->conf,
+                                ( const unsigned char*)secInst->secretKey,secInst->secretKeyLen,
+                                ( const unsigned char*) secInst->publicIdentity,secInst->publicIdLen);
+        }
+        else if (secInst->securityMode == LWM2M_SECURITY_MODE_CERTIFICATE)
+        {
+            mbedtls_x509_crt_init(&certificateCA);
+            mbedtls_x509_crt_init(&certificateClient);
+            mbedtls_pk_init(&privateKey);
+
+            mbedtls_x509_crt_parse(&certificateCA, secInst->publicIdentity, secInst->publicIdLen);
+            mbedtls_x509_crt_parse(&certificateClient, secInst->publicIdentity, secInst->publicIdLen);
+            mbedtls_pk_parse_key(&privateKey, secInst->secretKey, secInst->secretKeyLen, NULL, 0);
+
+            mbedtls_ssl_conf_ca_chain(&connection->conf, &certificateCA, NULL);
+            mbedtls_ssl_conf_own_cert(&connection->conf, &certificateClient, &privateKey);
+        }
+
+        mbedtls_ssl_conf_authmode( &connection->conf, MBEDTLS_SSL_VERIFY_REQUIRED );
         mbedtls_ssl_conf_rng( &connection->conf, mbedtls_ctr_drbg_random, &network->ctr_drbg );
         mbedtls_ssl_conf_dbg( &connection->conf, my_debug, stdout );
 //            if( ( ret = mbedtls_ssl_set_hostname( &newConnP->ssl, "mbed TLS Server" ) ) != 0 ) {
@@ -242,7 +272,7 @@ connection_t * internal_configure_ssl(connection_t * connection,
         mbedtls_ssl_set_bio( &connection->ssl, connection,
                              mbedtls_net_send, mbedtls_net_recv, NULL );
         mbedtls_ssl_set_timer_cb(&connection->ssl,connection,set_delay,get_delay);
-        mbedtls_ssl_conf_ciphersuites(&connection->conf, &prefered_cipherlist);
+        mbedtls_ssl_conf_ciphersuites(&connection->conf, &preferedCiphers);
         mbedtls_ssl_setup (&connection->ssl,&connection->conf );
 
         network->handshakeState = DTLS_HANDSHAKE_IN_PROGRESS;
