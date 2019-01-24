@@ -15,7 +15,6 @@
 #include "lwm2m/c_connect.h"
 #include "lwm2m/network.h"
 #include "lwm2m/debug.h"
-#include "../internal.h"
 #include "network_common.h"
 #include <stdio.h>
 #include <errno.h>
@@ -66,16 +65,6 @@ uint8_t decode_uri(char* uri, char** host, uint16_t* port)
     return r;
 }
 
-void lwm2m_network_force_interface(lwm2m_context_t * contextP, void* interface)
-{
-    network_t* network = (network_t*)contextP->userData;
-    connection_t * connP = (connection_t*)network->connection_list;
-    while (connP != NULL) {
-        connP->addr.net_if_out = interface;
-        connP = (connection_t*)connP->next;
-    }
-}
-
 bool lwm2m_session_is_equal(void * session1,
                             void * session2,
                             void * userData)
@@ -86,7 +75,7 @@ bool lwm2m_session_is_equal(void * session1,
 
 #ifdef LWM2M_SERVER_MODE
 
-static inline connection_t* internal_create_server_connection(network_t* network, addr_t addr) {
+connection_t* internal_create_server_connection(network_t* network, addr_t addr) {
     connection_t* connection = (connection_t *)lwm2m_malloc(sizeof(connection_t));
     if (connection == NULL)
     {
@@ -98,7 +87,7 @@ static inline connection_t* internal_create_server_connection(network_t* network
     connection->addr = addr;
 
     #ifdef LWM2M_WITH_DTLS
-    connection->dtls = network->dtls;
+    connection->dtls = network->publicIdLen;
     if (connection->dtls) {
         int ret;
         if ((ret = init_server_connection_ssl (connection,network))!=0){
@@ -111,7 +100,7 @@ static inline connection_t* internal_create_server_connection(network_t* network
     return connection;
 }
 #else
-static inline connection_t* internal_create_server_connection(network_t* network, addr_t addr) {
+connection_t* internal_create_server_connection(network_t* network, addr_t addr) {
     (void)network;
     (void)addr;
     return NULL;
@@ -125,10 +114,6 @@ connection_t * internal_connection_find(network_t * network, addr_t addr) {
             return connP;
         connP = (connection_t*)connP->next;
     }
-    if (connP == NULL && network->type == NET_SERVER_PROCESS) {
-        return internal_create_server_connection(network, addr);
-    }
-
     return NULL;
 }
 
@@ -148,7 +133,7 @@ uint8_t lwm2m_network_init(lwm2m_context_t * contextP, uint16_t localPort) {
     if (contextP->userData == NULL)
         return 0;
 
-    network_t* network = (network_t*)contextP->userData;
+    network_t* network = network_from_context(contextP);
     memset(network, 0, sizeof(network_t));
 
 #ifdef LWM2M_WITH_DTLS
@@ -297,9 +282,9 @@ void lwm2m_close_connection(void * sessionH,
 void lwm2m_network_close(lwm2m_context_t * contextP) {
     if (!contextP->userData) return;
 
-    network_t* network = (network_t*)contextP->userData;
+    network_t* network = network_from_context(contextP);
 
-    // Close connections
+    // Close all connections that are not already closed by lwm2m_close()
     if ( network->connection_list) {
         connection_t * t = network->connection_list;
         while (t) {

@@ -14,7 +14,12 @@
 #pragma once
 
 #include "lwm2m/c_connect.h"
+#include "lwm2m/network.h"
 #include "wakaama_config.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #if defined(LWIP) && defined(POSIX_NETWORK)
 #error "You cannot define LWIP and POSIX_NETWORK!"
@@ -64,14 +69,14 @@ typedef struct _connection_t
     network_t* network;
     uint16_t shortServerID;  ///< The lwm2m short server id. Is always 0 on a lwm2m server.
     addr_t addr;             ///< The IP address/port of this connection
-    sock_t* sock;             ///< Connection socket reference
+    sock_t* sock;            ///< Connection socket reference
     #ifdef LWM2M_WITH_DTLS
     mbedtls_ssl_context ssl; ///< Connection ssl context
     mbedtls_ssl_config conf; ///< Connection ssl configuration
     bool dtls;               ///< Is this a dtls connection?
     uint32_t tmr_intermediate_ms;
     uint32_t tmr_final_ms;   ///< A timer is active if this is != 0
-    struct timeval tmr_current;
+    time_t tmr_current;
     #endif
     #ifdef LWIP
     struct pbuf *p;          ///< Receive buffer
@@ -83,22 +88,21 @@ typedef enum {
     NET_SERVER_PROCESS
 } network_process_type_t;
 
-#define MAX_SOCKETS 10
+#ifndef LWM2M_MAX_SOCKETS
+#define LWM2M_MAX_SOCKETS 10
+#endif
 
 // This structure is stored in the wakama context custom object
 // and consists of all open/bound network sockets, network interfaces,
 // and dtls common stuff like entropy and random generator.
 typedef struct _network_t_ {
-    sock_t socket_handle[MAX_SOCKETS]; // Array of socket handles
-    unsigned open_listen_sockets;
+    time_t due_time_ms; // due time in milliseconds
     connection_t* connection_list;
     network_process_type_t type;
     #ifdef LWM2M_WITH_DTLS
-    bool dtls;
-    bool inHandshake;
+    enum DtlsHandshakeState handshakeState;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
-    connection_t* cached_next_timer_connection;
     #endif
     // In server mode with enabled DTLS, we need the preshared information
     #if defined(LWM2M_WITH_DTLS) && defined(LWM2M_SERVER_MODE)
@@ -119,6 +123,8 @@ typedef struct _network_t_ {
     #ifdef POSIX_NETWORK
     int epfd; // epoll descriptor
     #endif
+    unsigned open_listen_sockets;
+    sock_t socket_handle[LWM2M_MAX_SOCKETS]; // Array of socket handles
 } network_t;
 
 // Parse uri in the form "coap[s]://[host]:[port]". host can be an IPv6 address ( "[::]" ).
@@ -139,7 +145,7 @@ bool ip_equal(addr_t a, addr_t b);
 
 #ifdef LWM2M_NETWORK_LOGGING
 void connection_log_io(connection_t* conn, int length, bool sending);
-#define network_log_info(...) fprintf(stdout, __VA_ARGS__)
+#define network_log_info(...) fprintf(stderr, __VA_ARGS__)
 #define network_log_error(...) fprintf(stderr, __VA_ARGS__)
 #else
 #define connection_log_io(...) {}
@@ -154,12 +160,30 @@ void connection_log_io(connection_t* conn, int length, bool sending);
 int mbedtls_net_send( void *ctx, const unsigned char *buf, size_t len );
 int mbedtls_net_recv( void *ctx, unsigned char *buf, size_t len );
 
-inline network_t* network_from_context(lwm2m_context_t* contextP) { return (network_t*)contextP->userData; }
+inline static network_t* network_from_context(lwm2m_context_t* contextP) { return (network_t*)contextP->userData; }
+
+/**
+ * `lwm2m_process` need to be called periodically and will provide an internal value in seconds when the next call is due.
+ * This function returns a pointer to this due time value. You can modify (decrease) the value if required (`lwm2m_watch_and_reconnect`
+ * and the ssl handshake code are doing this for example). This will cause `lwm2m_block_wait` to return sooner than the given timeout.
+ *
+ * @param contextP Wakaama context
+ * @return A pointer to the next due time in milliseconds
+ */
+inline static time_t* lwm2m_due_time(lwm2m_context_t * contextP) { return &network_from_context(contextP)->due_time_ms; }
 
 /// Internal SSL methods
 int init_server_connection_ssl(connection_t* connection, network_t* network);
 bool internal_network_ssl_init(network_t* network);
-void internal_check_timer(lwm2m_context_t *contextP, struct timeval* next_event);
+void internal_check_timer(lwm2m_context_t *contextP);
 connection_t * internal_configure_ssl(connection_t * connection, network_t *network, security_instance_t *secInst);
 void internal_close_connection_ssl(network_t* network, connection_t * t);
 void internal_network_close_ssl(network_t* network);
+
+#ifdef LWM2M_SERVER_MODE
+connection_t* internal_create_server_connection(network_t* network, addr_t addr);
+#endif
+
+#ifdef __cplusplus
+}
+#endif

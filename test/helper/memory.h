@@ -27,9 +27,15 @@ public:
     void add(long mem, const std::string& stacktrace) {
         memAreas.insert(std::make_pair(mem, stacktrace));
     }
-    void remove(long mem) {
-        memAreas.erase(mem);
+    bool remove(long mem) {
+        return memAreas.erase(mem);
     }
 };
+
+#define MEMEVAL(FF) \
+    std::for_each(memoryObserver.memAreas.begin (),memoryObserver.memAreas.end(), \
+                  [](MemoryObserver::MemAreas::value_type it){ \
+        FF << "Entry @ " +std::to_string(it.first) + "\n" + it.second; \
+    });
 
 extern MemoryObserver memoryObserver;

@@ -19,37 +19,14 @@
  *    
  *******************************************************************************/
 
-/*
- Copyright (c) 2013, 2014 Intel Corporation
-
- Redistribution and use in source and binary forms, with or without modification,
- are permitted provided that the following conditions are met:
-
-     * Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-     * Redistributions in binary form must reproduce the above copyright notice,
-       this list of conditions and the following disclaimer in the documentation
-       and/or other materials provided with the distribution.
-     * Neither the name of Intel Corporation nor the names of its contributors
-       may be used to endorse or promote products derived from this software
-       without specific prior written permission.
-
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
- ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
- IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
- INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
- BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
- OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- THE POSSIBILITY OF SUCH DAMAGE.
-
- David Navarro <david.navarro@intel.com>
-
-*/
-
 #include "internals.h"
+#include "context.h"
+#include "platform.h"
+#include "registration.h"
+#include "lwm2m_client.h"
+#include "errorcodes.h"
+#include "debug.h"
+#include "utils.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -360,32 +337,31 @@ int lwm2m_remove_object(lwm2m_context_t * contextP,
 #endif
 
 
-int lwm2m_step(lwm2m_context_t * contextP,
+void lwm2m_step(lwm2m_context_t * contextP,
                time_t * timeoutP)
 {
     time_t tv_sec;
-    int result;
 
     tv_sec = lwm2m_gettime();
-    if (tv_sec < 0) return COAP_500_INTERNAL_SERVER_ERROR;
+
+    contextP->lastStepError = COAP_NO_ERROR;
 
 #ifdef LWM2M_CLIENT_MODE
 
 next_step:
     switch (contextP->state)
     {
+    case STATE_EXCEPTIONAL:
+        break;
     case STATE_INITIAL:
-        if (0 != prv_refreshServerList(contextP)) return COAP_503_SERVICE_UNAVAILABLE;
-        if (contextP->serverList != NULL)
-        {
+        contextP->lastStepError = prv_refreshServerList(contextP);
+        if (contextP->serverList != NULL){
             contextP->state = STATE_REGISTER_REQUIRED;
-        }
-        else
-        {
-            // Bootstrapping
+            goto next_step;
+        } else {
             contextP->state = STATE_BOOTSTRAP_REQUIRED;
+            break;
         }
-        goto next_step;
     case STATE_BOOTSTRAP_REQUIRED:
 #ifdef LWM2M_BOOTSTRAP
         if (contextP->bootstrapServerList != NULL)
@@ -397,9 +373,7 @@ next_step:
         }
         else
 #endif
-        {
-            return COAP_503_SERVICE_UNAVAILABLE;
-        }
+        { break; }
 
 #ifdef LWM2M_BOOTSTRAP
     case STATE_BOOTSTRAPPING:
@@ -423,14 +397,21 @@ next_step:
     // This is a two step phase. First a connection is established
     // then the lwm2m handshake starts.
     case STATE_REGISTER_REQUIRED:
-        result = registration_init_connection(contextP);
+        contextP->lastStepError = registration_init_connection(contextP);
+        if(contextP->lastStepError!=0){
+            contextP->state=STATE_EXCEPTIONAL;
+            break;
+        }
         contextP->state = STATE_REGISTER_REQUIRED2;
         *timeoutP = 0;
         break;
 
     case STATE_REGISTER_REQUIRED2:
-        result = registration_start(contextP);
-        if (COAP_NO_ERROR != result) return result;
+        contextP->lastStepError = registration_start(contextP);
+        if(contextP->lastStepError!=0){
+            contextP->state=STATE_EXCEPTIONAL;
+            break;
+        }
         contextP->state = STATE_REGISTERING;
         break;
     case STATE_REGISTERING:
@@ -475,6 +456,4 @@ next_step:
 
     registration_step(contextP, tv_sec, timeoutP);
     transaction_step(contextP, tv_sec, timeoutP);
-
-    return 0;
 }

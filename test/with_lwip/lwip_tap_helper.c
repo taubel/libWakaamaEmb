@@ -18,12 +18,13 @@ typedef int make_iso_compilers_happy; // if not LWIP
 #include "netif/etharp.h"
 #include "lwipopts.h"
 
-#include "lwm2m/debug.h" // for lwm2m_printf
+#include "../src/network/network_common.h"
 #include "lwip_tap_helper.h"
 #include "internals.h"
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
@@ -64,11 +65,14 @@ static void tapif_input(struct netif *netif)
 
     /* Obtain the size of the packet and put it into the "len"
        variable. */
+    errno = 0;
     len = read((intptr_t)netif->state, buf, sizeof(buf));
     if (len == (u16_t)-1) {
+        if(errno==EAGAIN) return;
       perror("read returned -1");
       exit(1);
     }
+    assert(len);
 
     /* We allocate a pbuf chain of pbufs from the pool. */
     p = pbuf_alloc(PBUF_RAW, len, PBUF_POOL);
@@ -127,6 +131,10 @@ err_t tapif_real_init(int netIfNo)
       perror("tapif_init: try running \"modprobe tun\" or rebuilding your kernel with CONFIG_TUN; cannot open "DEVTAP);
       exit(1);
     }
+    if (fcntl((int)(intptr_t)netif->state, F_SETFL, O_NONBLOCK)==-1){
+        perror("tapif_init: Could not set tap device to non-blocking");
+        exit(1);
+    }
 
     struct ifreq ifr;
     memset(&ifr, 0, sizeof(ifr));
@@ -178,68 +186,59 @@ bool lwip_network_init(void)
       strncpy(nm_str, ip4addr_ntoa(&netmask), sizeof(nm_str));
       strncpy(gw_str, ip4addr_ntoa(&gw), sizeof(gw_str));
 
-      lwm2m_printf("Host at %s mask %s gateway %s\n", ip_str, nm_str, gw_str);
+      network_log_info("Host at %s mask %s gateway %s\n", ip_str, nm_str, gw_str);
 
         netif_add(&netifs[tapDevices], &ipaddr, &netmask, &gw, NULL, tapif_init, ethernet_input);
       err_t tapIfOK = tapif_real_init(tapDevices);
       if (tapIfOK != ERR_OK) {
-        lwm2m_printf("tapif_real_init failed with %i\n", tapIfOK);
+        fprintf(stderr, "tapif_real_init failed with %i\n", tapIfOK);
         lwip_init_done = false;
         return false;
       }
       netif_set_up(&netifs[tapDevices]);
       netif_create_ip6_linklocal_address(&netifs[tapDevices], 1);
   }
+
   return true;
   //netif_set_default(&netifs[tapDevices]);
 }
 
-void* lwip_network_get_interface(int id)
-{
-     struct netif* n = netif_list;
-     for (int c = 1;c>=0 && n;--c)
-     {
-         if (c==id)
-             return n;
-         n = n->next;
-     }
-     return NULL;
+bool lwm2m_network_process(lwm2m_context_t * contextP) {
+    network_t* network = (network_t*)contextP->userData;
+
+    // use the first lwip network interface for the client
+    if (network->type == NET_CLIENT_PROCESS){
+        network->socket_handle[0].net_if_out = &netifs[0];
+    }else{
+        network->socket_handle[0].net_if_out = &netifs[1];
+    }
+    struct netif* netifP = network->socket_handle[0].net_if_out;
+    assert(netifP);
+    tapif_input(netifP);
+#if NO_SYS==1
+    sys_check_timeouts();
+#endif
+    internal_check_timer(contextP);
+    return true;
 }
 
-int lwm2m_process_blocking(lwm2m_context_t * contextP) {
-    time_t max_wait_sec = 5;
-    int result = lwm2m_step(contextP, &max_wait_sec);
-    if (result != 0 && result != COAP_503_SERVICE_UNAVAILABLE)
-    {
-        fprintf(stderr, "lwm2m_step() failed: 0x%X\r\n", result);
-    }
-
+int lwm2m_block_wait(lwm2m_context_t * contextP, unsigned timeout_in_msec) {
     fd_set fdset;
     int ret;
-    struct timeval tv;
-    u32_t msecs = sys_timeouts_sleeptime();
 
-    tv.tv_sec = msecs / 1000;
-    if (tv.tv_sec > max_wait_sec) tv.tv_sec = max_wait_sec;
-    tv.tv_usec = (msecs % 1000) * 1000;
+    struct timeval next_event = {0, timeout_in_msec*1000};
+    if (next_event.tv_sec==0 && next_event.tv_usec==0) return 0;
 
     network_t* network = (network_t*)contextP->userData;
-    if (network == NULL || network->connection_list == NULL)
+    if (network == NULL)
         return COAP_505_NO_NETWORK_CONNECTION;
-    struct netif* netifP = network->connection_list->addr.net_if_out;
+    struct netif* netifP = network->socket_handle[0].net_if_out;
 
     FD_ZERO(&fdset);
     FD_SET((intptr_t)netifP->state, &fdset);
 
-    ret = select((intptr_t)netifP->state + 1, &fdset, NULL, NULL, &tv);
-    if (ret > 0) {
-      tapif_input(netifP);
-    }
-
-#if NO_SYS==1
-    sys_check_timeouts();
-#endif
-    return result;
+    ret = select((intptr_t)netifP->state + 1, &fdset, NULL, NULL, &next_event);
+    return ret;
 }
 
 #else
