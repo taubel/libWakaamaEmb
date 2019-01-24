@@ -208,6 +208,14 @@ connection_t * internal_configure_ssl(connection_t * connection,
                                              security_instance_t* secInst) {
     if (connection->dtls) {
         int ret;
+        int prefered_cipherlist[] = {
+            MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8,
+            MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+            MBEDTLS_TLS_PSK_WITH_AES_128_CBC_SHA256,
+            MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+            0
+        };
+
         mbedtls_ssl_init( &connection->ssl );
         mbedtls_ssl_config_init( &connection->conf );
         mbedtls_ssl_conf_handshake_timeout( &connection->conf,1000,30000 );
@@ -234,6 +242,7 @@ connection_t * internal_configure_ssl(connection_t * connection,
         mbedtls_ssl_set_bio( &connection->ssl, connection,
                              mbedtls_net_send, mbedtls_net_recv, NULL );
         mbedtls_ssl_set_timer_cb(&connection->ssl,connection,set_delay,get_delay);
+        mbedtls_ssl_conf_ciphersuites(&connection->conf, &prefered_cipherlist);
         mbedtls_ssl_setup (&connection->ssl,&connection->conf );
 
         network->handshakeState = DTLS_HANDSHAKE_IN_PROGRESS;
