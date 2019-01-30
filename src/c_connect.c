@@ -236,13 +236,13 @@ bool lwm2m_use_dtls_x509(lwm2m_context_t *contextP, uint16_t shortServerID,
         securityInstance->securityMode = LWM2M_SECURITY_MODE_CERTIFICATE;
 
         securityInstance->publicIdentity = certificate;
-        securityInstance->publicIdLen = strlen(certificate);
+        securityInstance->publicIdLen = strlen(certificate) + 1;
 
         securityInstance->secretKey = privateKey;
-        securityInstance->secretKeyLen = strlen(privateKey);
+        securityInstance->secretKeyLen = strlen(privateKey) + 1;
 
         securityInstance->serverPublicKey = serverCertificate;
-        securityInstance->serverPublicKeyLen = strlen(serverCertificate);
+        securityInstance->serverPublicKeyLen = strlen(serverCertificate) + 1;
     } else {
         securityInstance->securityMode = LWM2M_SECURITY_MODE_NONE;
     }

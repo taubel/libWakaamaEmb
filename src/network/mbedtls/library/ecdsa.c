@@ -207,7 +207,7 @@ int mbedtls_ecdsa_verify( mbedtls_ecp_group *grp,
                   const unsigned char *buf, size_t blen,
                   const mbedtls_ecp_point *Q, const mbedtls_mpi *r, const mbedtls_mpi *s)
 {
-    int ret;
+    int ret = 0;
     mbedtls_mpi e, s_inv, u1, u2;
     mbedtls_ecp_point R;
 

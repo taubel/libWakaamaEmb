@@ -120,6 +120,7 @@ void internal_network_close(network_t* network){(void)network;}
 
 
 intptr_t lwm2m_network_native_sock(lwm2m_context_t * contextP, unsigned sock_no) {
+    static char destIP[40];
     network_t* network = (network_t*)contextP->userData;
     if (!network) return -1;
     return (intptr_t)network->socket_handle[sock_no].udp;
@@ -128,7 +129,6 @@ intptr_t lwm2m_network_native_sock(lwm2m_context_t * contextP, unsigned sock_no)
 #ifdef LWM2M_NETWORK_LOGGING
 void connection_log_io(connection_t* connP, int length, bool sending) {
     #if LWIP_IPV4 && LWIP_IPV6
-    static char destIP[40];
     const char* a = ipaddr_ntoa(&connP->addr.addr);
     strcpy(destIP, a);
     const char* b;

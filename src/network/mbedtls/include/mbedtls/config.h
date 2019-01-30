@@ -510,11 +510,13 @@
  *
  * Comment macros to disable the curve and functions for it
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_ECP_DP_SECP192R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP224R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP256R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP384R1_ENABLED
 #define MBEDTLS_ECP_DP_SECP521R1_ENABLED
+#endif
 //#define MBEDTLS_ECP_DP_SECP192K1_ENABLED
 //#define MBEDTLS_ECP_DP_SECP224K1_ENABLED
 //#define MBEDTLS_ECP_DP_SECP256K1_ENABLED
@@ -740,7 +742,9 @@
  *      MBEDTLS_TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA
  *      MBEDTLS_TLS_ECDHE_ECDSA_WITH_RC4_128_SHA
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+#endif
 
 /**
  * \def MBEDTLS_KEY_EXCHANGE_ECDH_ECDSA_ENABLED
@@ -1209,7 +1213,7 @@
  *
  * Comment this macro to disable support for the max_fragment_length extension
  */
-//#define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
+#define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH
 
 /**
  * \def MBEDTLS_SSL_PROTO_SSL3
@@ -1376,7 +1380,7 @@
  *
  * Comment this macro to disable support for server name indication in SSL
  */
-#define MBEDTLS_SSL_SERVER_NAME_INDICATION
+//#define MBEDTLS_SSL_SERVER_NAME_INDICATION
 
 /**
  * \def MBEDTLS_SSL_TRUNCATED_HMAC
@@ -1879,7 +1883,9 @@
  *
  * Requires: MBEDTLS_ECP_C
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_ECDH_C
+#endif
 
 /**
  * \def MBEDTLS_ECDSA_C
@@ -1894,7 +1900,9 @@
  *
  * Requires: MBEDTLS_ECP_C, MBEDTLS_ASN1_WRITE_C, MBEDTLS_ASN1_PARSE_C
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_ECDSA_C
+#endif
 
 /**
  * \def MBEDTLS_ECJPAKE_C
@@ -1927,7 +1935,9 @@
  *
  * Requires: MBEDTLS_BIGNUM_C and at least one MBEDTLS_ECP_DP_XXX_ENABLED
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_ECP_C
+#endif
 
 /**
  * \def MBEDTLS_ENTROPY_C
@@ -2181,7 +2191,9 @@
  *
  * Uncomment to enable generic public key wrappers.
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_PK_C
+#endif
 
 /**
  * \def MBEDTLS_PK_PARSE_C
@@ -2196,7 +2208,9 @@
  *
  * Uncomment to enable generic public key parse functions.
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_PK_PARSE_C
+#endif
 
 /**
  * \def MBEDTLS_PK_WRITE_C
@@ -2315,7 +2329,7 @@
  *
  * Requires: MBEDTLS_BIGNUM_C, MBEDTLS_OID_C
  */
-#define MBEDTLS_RSA_C
+//#define MBEDTLS_RSA_C
 
 /**
  * \def MBEDTLS_SHA1_C
@@ -2529,7 +2543,9 @@
  *
  * This module is required for the X.509 parsing modules.
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_X509_USE_C
+#endif
 
 /**
  * \def MBEDTLS_X509_CRT_PARSE_C
@@ -2545,7 +2561,9 @@
  *
  * This module is required for X.509 certificate parsing.
  */
+#ifdef LWM2M_WITH_DTLS_X509
 #define MBEDTLS_X509_CRT_PARSE_C
+#endif
 
 /**
  * \def MBEDTLS_X509_CRL_PARSE_C

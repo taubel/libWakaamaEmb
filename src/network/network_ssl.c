@@ -25,6 +25,17 @@ typedef int make_iso_compilers_happy; // if not LWM2M_WITH_DTLS
 
 #ifdef LWM2M_WITH_DTLS
 
+static const int preferedCiphers[] =
+{
+#ifdef LWM2M_WITH_DTLS_X509
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+#else
+    MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8,
+    MBEDTLS_TLS_PSK_WITH_AES_128_CBC_SHA256,
+#endif
+    0,
+};
 
 /**
  * \brief          Set a pair of delays to watch
@@ -208,25 +219,11 @@ connection_t * internal_configure_ssl(connection_t * connection,
                                              security_instance_t* secInst) {
     if (connection->dtls) {
         int ret;
-        int preferedCiphers[] = { 0, 0, 0 };
+#ifdef LWM2M_WITH_DTLS_X509
         mbedtls_x509_crt certificateCA;
         mbedtls_x509_crt certificateClient;
         mbedtls_pk_context privateKey;
-
-        if (secInst->securityMode == LWM2M_SECURITY_MODE_PRE_SHARED_KEY)
-        {
-            preferedCiphers[0] = MBEDTLS_TLS_PSK_WITH_AES_128_CCM_8;
-            preferedCiphers[1] = MBEDTLS_TLS_PSK_WITH_AES_128_CBC_SHA256;
-        }
-        else if (secInst->securityMode == LWM2M_SECURITY_MODE_CERTIFICATE)
-        {
-            preferedCiphers[0] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8;
-            preferedCiphers[1] = MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256;
-        }
-        else
-        {
-            return NULL;
-        }
+#endif
 
         mbedtls_ssl_init( &connection->ssl );
         mbedtls_ssl_config_init( &connection->conf );
@@ -247,18 +244,36 @@ connection_t * internal_configure_ssl(connection_t * connection,
                                 ( const unsigned char*)secInst->secretKey,secInst->secretKeyLen,
                                 ( const unsigned char*) secInst->publicIdentity,secInst->publicIdLen);
         }
+#ifdef LWM2M_WITH_DTLS_X509
         else if (secInst->securityMode == LWM2M_SECURITY_MODE_CERTIFICATE)
         {
             mbedtls_x509_crt_init(&certificateCA);
             mbedtls_x509_crt_init(&certificateClient);
             mbedtls_pk_init(&privateKey);
 
-            mbedtls_x509_crt_parse(&certificateCA, secInst->publicIdentity, secInst->publicIdLen);
-            mbedtls_x509_crt_parse(&certificateClient, secInst->publicIdentity, secInst->publicIdLen);
-            mbedtls_pk_parse_key(&privateKey, secInst->secretKey, secInst->secretKeyLen, NULL, 0);
+            if ((ret = mbedtls_x509_crt_parse(&certificateCA, secInst->publicIdentity, secInst->publicIdLen)) != 0)
+            {
+                network_log_error("mbedtls_x509_crt_parse certificateCA returned: %d\r\n", ret);
+                return NULL;
+            }
+            if ((ret = mbedtls_x509_crt_parse(&certificateClient, secInst->publicIdentity, secInst->publicIdLen)) != 0)
+            {
+                network_log_error("mbedtls_x509_crt_parse certificateClient returned: %d\r\n", ret);
+                return NULL;
+            }
+            if ((ret = mbedtls_pk_parse_key(&privateKey, secInst->secretKey, secInst->secretKeyLen, NULL, 0)) != 0)
+            {
+                network_log_error("mbedtls_pk_parse_key privateKey returned: %d\r\n", ret);
+                return NULL;
+            }
 
             mbedtls_ssl_conf_ca_chain(&connection->conf, &certificateCA, NULL);
             mbedtls_ssl_conf_own_cert(&connection->conf, &certificateClient, &privateKey);
+        }
+#endif
+        else
+        {
+            return NULL;
         }
 
         mbedtls_ssl_conf_authmode( &connection->conf, MBEDTLS_SSL_VERIFY_REQUIRED );
@@ -272,8 +287,12 @@ connection_t * internal_configure_ssl(connection_t * connection,
         mbedtls_ssl_set_bio( &connection->ssl, connection,
                              mbedtls_net_send, mbedtls_net_recv, NULL );
         mbedtls_ssl_set_timer_cb(&connection->ssl,connection,set_delay,get_delay);
-        mbedtls_ssl_conf_ciphersuites(&connection->conf, &preferedCiphers);
+        mbedtls_ssl_conf_ciphersuites(&connection->conf, preferedCiphers);
         mbedtls_ssl_setup (&connection->ssl,&connection->conf );
+#ifdef ESP8266
+//      TODO: change into lookup table
+        mbedtls_ssl_conf_max_frag_len(&connection->conf, MBEDTLS_SSL_MAX_FRAG_LEN_512);
+#endif
 
         network->handshakeState = DTLS_HANDSHAKE_IN_PROGRESS;
         if( ( ret = mbedtls_ssl_handshake( &connection->ssl ) ) != 0 ) {
